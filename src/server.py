@@ -24,7 +24,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-server = Server("CHIRIKUKAN-PLATFORM-mcp-mod")
+server = Server("mlit-geospatial-mcp")
 
 
 @server.list_tools()
