@@ -1,0 +1,11 @@
+[project]
+name="mlit-geospatial-mcp"
+version="0.0.1"
+dependencies = [
+    "anyio",
+    "mcp",
+    "shapely",
+    "pyproj",
+    "requests",
+    "asyncio"
+]
