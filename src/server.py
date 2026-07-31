@@ -52,14 +52,16 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
         list[TextContent]: 実行結果（JSON文字列）
     """
     rid = uuid.uuid4().hex
-    logger.info(f"Tool called: {name} (request_id: {rid})")
+    logger.info("Tool called", tool=name, request_id=rid)
 
     spec = API_SPECS[name]
     payload = build_payload(
         spec=spec,
         args=arguments,
     )
-    logger.info(f"payload:{payload}")
+    # Structured, not an f-string: the payload carries user query args, and redaction can only
+    # walk a dict.
+    logger.info("Tool payload", payload=payload)
     result = await handle_request(payload)
     return [
         types.TextContent(

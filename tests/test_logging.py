@@ -33,3 +33,15 @@ def test_secrets_and_pii_are_redacted_at_any_depth():
     assert line["user"]["email"] == "[Redacted]"
     assert line["user"]["id"] == "u1"
     assert line["keep"] == "yes"
+
+
+# A key-based deny list cannot reach these: the credential is inside the string, not under a key.
+def test_credentials_inside_text_are_scrubbed():
+    line = _emit(
+        error="HTTPSConnectionPool: https://api.example.com/v1?apiKey=SECRET123 failed",
+        exception="OperationalError: postgres://user:PASSWORD123@db.internal:5432/app",
+    )
+
+    assert "SECRET123" not in line["error"]
+    assert "PASSWORD123" not in line["exception"]
+    assert "api.example.com" in line["error"], "the useful part of the URL must survive"

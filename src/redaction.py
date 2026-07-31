@@ -1,5 +1,7 @@
 """Key-based redaction for structlog. Values never reach storage unredacted."""
 
+import re
+
 REDACTED = "[Redacted]"
 
 # OWASP "never log": secrets. Unconditional, dev included.
@@ -47,9 +49,23 @@ _PII_KEYS = {
 
 _DENY_KEYS = _SECRET_KEYS | _PII_KEYS
 
+# Values that arrive inside a string instead of under a key, where matching on the key cannot
+# reach them: requests/urllib3 put the full request URL in their exception text, psycopg puts
+# the connection string in its own, and an f-string log message bakes in whatever it formatted.
+_TEXT_KEYS = {"event", "message", "error", "exception", "stack", "traceback", "excinfo"}
+
+_URL_CREDENTIALS_RE = re.compile(r"([a-zA-Z][\w+.-]*://[^\s:/@]+):[^\s@/]+@")
+_QUERY_STRING_RE = re.compile(r"\?[^\s\"'>]+")
+
 
 def _normalize(key: str) -> str:
     return key.replace("_", "").replace("-", "").lower()
+
+
+def _scrub_text(text: str) -> str:
+    text = _URL_CREDENTIALS_RE.sub(rf"\1:{REDACTED}@", text)
+
+    return _QUERY_STRING_RE.sub(f"?{REDACTED}", text)
 
 
 def _redact(value):
@@ -64,8 +80,19 @@ def _redact(value):
 
 
 def redact_processor(logger, method_name, event_dict):
-    """structlog processor: masks denied keys at any depth."""
-    return _redact(event_dict)
+    """structlog processor: masks denied keys at any depth, scrubs credentials out of log text.
+
+    The scrub is top-level only. Exception text and the log message live there, whereas a
+    nested `message` is user prose — scrubbing that would silently mangle what we log to
+    debug with, for no gain.
+    """
+    redacted = _redact(event_dict)
+
+    for key, value in redacted.items():
+        if _normalize(str(key)) in _TEXT_KEYS and isinstance(value, str):
+            redacted[key] = _scrub_text(value)
+
+    return redacted
 
 
 # Cloud Logging reads severity from a top-level `severity` field, not structlog's `level`.
@@ -73,10 +100,8 @@ _SEVERITY_BY_LEVEL = {
     "critical": "CRITICAL",
     "error": "ERROR",
     "warning": "WARNING",
-    "warn": "WARNING",
     "info": "INFO",
     "debug": "DEBUG",
-    "trace": "DEBUG",
 }
 
 
