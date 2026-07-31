@@ -44,4 +44,7 @@ def test_credentials_inside_text_are_scrubbed():
 
     assert "SECRET123" not in line["error"]
     assert "PASSWORD123" not in line["exception"]
-    assert "api.example.com" in line["error"], "the useful part of the URL must survive"
+    # The line stays useful: only the query string and the password are replaced.
+    assert line["error"].startswith("HTTPSConnectionPool")
+    assert "?[Redacted]" in line["error"]
+    assert "[Redacted]@db.internal:5432" in line["exception"]
