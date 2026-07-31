@@ -1,5 +1,4 @@
 import json
-import logging
 import uuid
 
 """
@@ -14,13 +13,13 @@ from mcp.server.lowlevel import NotificationOptions, Server
 from mcp.server.models import InitializationOptions
 from mcp.server.stdio import stdio_server
 
+from logger import get_logger
 from request_processor.handler import handle_request
 from tools import API_SPECS, TOOLS
 from utils.payload import build_payload
 
 # ロガー設定
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 server = Server("mlit-geospatial-mcp")
