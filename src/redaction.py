@@ -1,10 +1,10 @@
-"""Key-based redaction for structlog. Values never reach storage unredacted."""
+"""Key-based redaction for structlog."""
 
 import re
 
 REDACTED = "[Redacted]"
 
-# OWASP "never log": secrets. Unconditional, dev included.
+# OWASP "never log": secrets.
 _SECRET_KEYS = {
     "password",
     "passwordconfirm",
@@ -26,8 +26,7 @@ _SECRET_KEYS = {
     "dsn",
 }
 
-# Direct identifiers only. These make a line attributable to a person and have no debugging
-# value, because user ids are logged alongside them.
+# Direct identifiers: no debugging value, since user ids are logged alongside them.
 _PII_KEYS = {
     "email",
     "phone",
@@ -37,22 +36,16 @@ _PII_KEYS = {
     "fullname",
 }
 
-# Deliberately NOT denied: address, street, postalCode, zip, lat/lon/latitude/longitude,
-# coordinates. They are the payload of a geospatial product — redacting them makes a failing
-# request impossible to reproduce — and the same content already survives in the free-text
-# message we keep by choice, so masking the structured copy buys almost nothing.
+# Location and address keys are intentionally absent: they are what these services analyse.
 
 _DENY_KEYS = _SECRET_KEYS | _PII_KEYS
 
-# Values that arrive inside a string instead of under a key, where matching on the key cannot
-# reach them: requests/urllib3 put the full request URL in their exception text, psycopg puts
-# the connection string in its own, and an f-string log message bakes in whatever it formatted.
+# Text fields, where a credential can sit inside the string with no key to match.
 _TEXT_KEYS = {"event", "message", "error", "exception", "stack"}
 
 _URL_CREDENTIALS_RE = re.compile(r"([a-zA-Z][\w+.-]*://[^\s:/@]+):[^\s@/]+@")
 
-# Only the sensitive query params, not the whole query string: in a tile request the dataset in
-# `url=` is the most useful thing on the line, and nuking it costs more than it protects.
+# Only the sensitive params: the rest of a URL is what makes the line debuggable.
 _SENSITIVE_PARAM_RE = re.compile(
     r"([?&][^=&\s]*(?:key|token|secret|password|signature|sig|credential|auth)[^=&\s]*=)"
     r"[^&\s\"'>]+",
@@ -82,11 +75,9 @@ def _redact(value):
 
 
 def redact_processor(logger, method_name, event_dict):
-    """structlog processor: masks denied keys at any depth, scrubs credentials out of log text.
+    """Mask denied keys at any depth; scrub credentials from top-level text only.
 
-    The scrub is top-level only. Exception text and the log message live there, whereas a
-    nested `message` is user prose — scrubbing that would silently mangle what we log to
-    debug with, for no gain.
+    Nested text is user prose, and rewriting it would mangle what we debug from.
     """
     redacted = _redact(event_dict)
 
