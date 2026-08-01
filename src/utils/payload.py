@@ -40,6 +40,8 @@ def build_payload(
         if param in args and args[param] is not None:
             payload[param] = args[param]
 
-    logger.info(f"build payload:{payload}")
+    # extra=, not an f-string: ExtraAdder puts these on the event dict where redaction
+    # can walk them; a formatted string is opaque to it.
+    logger.info("build payload", extra={"payload": payload})
 
     return payload

@@ -1,10 +1,9 @@
 import json
-import logging
 import uuid
 
 """
-MCPサーバーのエントリポイント。
-ツールのリスト取得やツール呼び出しのハンドラを提供する。
+Entry point for the MCP server.
+Provides the handlers for listing tools and for calling them.
 """
 
 
@@ -14,13 +13,12 @@ from mcp.server.lowlevel import NotificationOptions, Server
 from mcp.server.models import InitializationOptions
 from mcp.server.stdio import stdio_server
 
+from logger import get_logger
 from request_processor.handler import handle_request
 from tools import API_SPECS, TOOLS
 from utils.payload import build_payload
 
-# ロガー設定
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 server = Server("mlit-geospatial-mcp")
@@ -29,10 +27,10 @@ server = Server("mlit-geospatial-mcp")
 @server.list_tools()
 async def handle_list_tools():
     """
-    利用可能なツール一覧を取得する。
+    Return the list of available tools.
 
     Returns:
-        TOOLS:ツール定義のリスト
+        TOOLS: the list of tool definitions
     """
     return TOOLS
 
@@ -40,27 +38,27 @@ async def handle_list_tools():
 @server.call_tool()
 async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent]:
     """
-    Claudから呼び出されたtoolを実行する。
-    tool名からAPI_SPECを取得し、引数をAPI用のpayloadに変換後、
-    handle_request（内部処理）に渡す。
-    結果をJSONとして返却。
+    Run a tool called by Claude.
+
+    Looks up the API_SPEC by tool name, converts the arguments into an API payload, passes it
+    to handle_request (internal processing), and returns the result as JSON.
 
     Args:
-        name(str):呼び出されたtool名
-        arguments(dict):toolに渡された引数
+        name(str): the name of the tool that was called
+        arguments(dict): the arguments passed to the tool
 
     Returns:
-        list[TextContent]: 実行結果（JSON文字列）
+        list[TextContent]: the result (a JSON string)
     """
     rid = uuid.uuid4().hex
-    logger.info(f"Tool called: {name} (request_id: {rid})")
+    logger.info("Tool called", tool=name, request_id=rid)
 
     spec = API_SPECS[name]
     payload = build_payload(
         spec=spec,
         args=arguments,
     )
-    logger.info(f"payload:{payload}")
+    logger.info("Tool payload", payload=payload)
     result = await handle_request(payload)
     return [
         types.TextContent(
@@ -72,8 +70,8 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
 
 async def _main() -> None:
     """
-    MCPサーバーのメイン処理。
-    イベントループを実行する。
+    Main entry point for the MCP server.
+    Runs the event loop.
     """
     async with stdio_server() as (read, write):
         caps = server.get_capabilities(

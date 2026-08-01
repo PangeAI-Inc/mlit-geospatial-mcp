@@ -2,7 +2,7 @@ import requests
 
 from utils.logger_config import setup_logger
 
-# 外部API呼び出し共通処理
+# Shared helper for outbound API calls
 
 logger = setup_logger(__name__)
 
@@ -21,6 +21,8 @@ def get(
         # elif response_type:
 
     except Exception as e:
-        logger.error(f"API呼び出し失敗 URL:{url} params:{params} エラー:{e}")
-        #     空配列で処理継続
+        # Keys only: the values carry the API key.
+        param_keys = sorted(params) if params else []
+        logger.error(f"API呼び出し失敗 URL:{url} param_keys:{param_keys} エラー:{e}")
+        # Continue with an empty result set
         return {"data": []}
