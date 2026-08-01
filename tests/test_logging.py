@@ -133,16 +133,15 @@ def test_setup_logger_emits_exactly_one_structured_line():
     assert len(lines) == 1
     assert lines[0]["severity"] == "ERROR"
 
-# The deployed services do not all set APP_ENV. Before this was keyed off the TTY, an unset
-# APP_ENV selected the console renderer, and tile-server shipped ANSI-coloured plaintext with no
-# severity to Cloud Logging — the exact failure PAN-597 exists to remove.
-def test_renderer_is_json_when_app_env_is_unset():
-    env = {k: v for k, v in os.environ.items() if k != "APP_ENV"}
+# The renderer decides between console and JSON. A deployed container has no terminal and does
+# not set APP_ENV=local, which is the condition tile-server got wrong: it shipped ANSI-coloured
+# plaintext with no severity to Cloud Logging. Piping this subprocess reproduces "no terminal".
+def test_deployed_conditions_render_json():
     result = subprocess.run(
         [sys.executable, "-c", "from src.logger import get_logger\nget_logger('x').info('probe')\n"],
         capture_output=True,
         text=True,
-        env=env,
+        env={**os.environ, "APP_ENV": "production"},
         check=True,
     )
     output = f"{result.stdout}\n{result.stderr}".strip()
@@ -150,3 +149,35 @@ def test_renderer_is_json_when_app_env_is_unset():
 
     assert line["severity"] == "INFO"
     assert "\x1b[" not in output, "ANSI escapes mean the console renderer was selected"
+
+
+# The explicit override a developer opts into, and which .env files already set.
+def test_app_env_local_keeps_console_output():
+    result = subprocess.run(
+        [sys.executable, "-c", "from src.logger import get_logger\nget_logger('x').info('probe')\n"],
+        capture_output=True,
+        text=True,
+        env={**os.environ, "APP_ENV": "local"},
+        check=True,
+    )
+
+    assert "\x1b[" in f"{result.stdout}{result.stderr}", "APP_ENV=local should stay readable"
+
+
+# mlit is a stdio MCP server: its stdout carries JSON-RPC frames, and the MCP spec forbids
+# writing anything else there. The other services share the rule so all logs land on one stream.
+def test_nothing_is_written_to_stdout():
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from src.logger import get_logger\nget_logger('x').error('probe')\n",
+        ],
+        capture_output=True,
+        text=True,
+        env={**os.environ, "APP_ENV": "test"},
+        check=True,
+    )
+
+    assert result.stdout == "", "stdout is a protocol channel; logs belong on stderr"
+    assert json.loads(result.stderr.strip().splitlines()[-1])["severity"] == "ERROR"
