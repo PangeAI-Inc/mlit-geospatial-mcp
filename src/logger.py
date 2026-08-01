@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import sys
 
 import structlog
 from structlog.dev import ConsoleRenderer
@@ -25,9 +26,13 @@ def _standardize_log_structure(logger, method_name, event_dict):
     return event_dict
 
 
-def _get_renderer(app_env: str):
-    """Console locally, JSON everywhere else, shared by structlog and stdlib records."""
-    if app_env == "local":
+def _get_renderer():
+    """Console when attached to a terminal, JSON everywhere else.
+
+    Keyed off the TTY rather than APP_ENV: a container has no terminal, so an unset APP_ENV can
+    no longer silently downgrade deployed logs to unstructured, severity-less console output.
+    """
+    if sys.stderr.isatty():
         return ConsoleRenderer()
     return structlog.processors.JSONRenderer(serializer=json.dumps)
 
@@ -46,7 +51,7 @@ def _configure() -> None:
             structlog.processors.format_exc_info,
             structlog.processors.UnicodeDecoder(),
             redact_processor,
-            _get_renderer(APP_ENV),
+            _get_renderer(),
         ],
         wrapper_class=structlog.make_filtering_bound_logger(level),
         context_class=dict,
@@ -66,7 +71,7 @@ def _configure() -> None:
         ],
         processors=[
             structlog.stdlib.ProcessorFormatter.remove_processors_meta,
-            _get_renderer(APP_ENV),
+            _get_renderer(),
         ],
     )
 

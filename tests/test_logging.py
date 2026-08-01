@@ -132,3 +132,21 @@ def test_setup_logger_emits_exactly_one_structured_line():
 
     assert len(lines) == 1
     assert lines[0]["severity"] == "ERROR"
+
+# The deployed services do not all set APP_ENV. Before this was keyed off the TTY, an unset
+# APP_ENV selected the console renderer, and tile-server shipped ANSI-coloured plaintext with no
+# severity to Cloud Logging — the exact failure PAN-597 exists to remove.
+def test_renderer_is_json_when_app_env_is_unset():
+    env = {k: v for k, v in os.environ.items() if k != "APP_ENV"}
+    result = subprocess.run(
+        [sys.executable, "-c", "from src.logger import get_logger\nget_logger('x').info('probe')\n"],
+        capture_output=True,
+        text=True,
+        env=env,
+        check=True,
+    )
+    output = f"{result.stdout}\n{result.stderr}".strip()
+    line = json.loads([l for l in output.splitlines() if l.startswith("{")][-1])
+
+    assert line["severity"] == "INFO"
+    assert "\x1b[" not in output, "ANSI escapes mean the console renderer was selected"
