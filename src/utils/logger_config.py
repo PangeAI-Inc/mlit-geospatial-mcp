@@ -8,7 +8,6 @@ except ImportError:
     from src import logger  # noqa: F401
 
 
-# ログ設定
 def setup_logger(name: str, level=logging.INFO) -> logging.Logger:
     """Return a stdlib logger whose records render through the shared chain in logger.py.
 
