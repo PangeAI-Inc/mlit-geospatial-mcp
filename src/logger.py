@@ -27,7 +27,6 @@ def _standardize_log_structure(logger, method_name, event_dict):
 
 
 def _get_renderer():
-    """Console for a human at a terminal or APP_ENV=local, JSON everywhere else."""
     # Raw env var, not the APP_ENV constant: its "local" default would match in a container.
     if os.environ.get("APP_ENV") == "local" or sys.stderr.isatty():
         return ConsoleRenderer()
@@ -57,7 +56,6 @@ def _configure() -> None:
         cache_logger_on_first_use=True,
     )
 
-    # Render stdlib records (uvicorn's, and any logging.getLogger caller) through the same chain.
     formatter = structlog.stdlib.ProcessorFormatter(
         foreign_pre_chain=[
             structlog.contextvars.merge_contextvars,
@@ -77,8 +75,7 @@ def _configure() -> None:
     handler = logging.StreamHandler()
     handler.setFormatter(formatter)
 
-    # "" is the root logger, so every existing logging.getLogger(__name__) call site
-    # in this repo renders through the shared chain without touching its call sites.
+    # "" is the root logger, so existing logging.getLogger call sites need no change.
     for name in ("", "uvicorn", "uvicorn.error", "uvicorn.access"):
         std_logger = logging.getLogger(name)
         std_logger.handlers = [handler]
