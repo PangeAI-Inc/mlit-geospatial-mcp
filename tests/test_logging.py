@@ -63,8 +63,8 @@ def test_credentials_inside_text_are_scrubbed():
 
 
 # The payload shape build_payload produces, logged by both server.py and payload.py. The
-# coordinates are the whole point of this service and are also the PII in it.
-def test_tool_payload_redacts_coordinates_and_keeps_the_rest():
+# coordinates are the whole point of this service, so they are logged, not masked.
+def test_tool_payload_stays_reproducible():
     payload = {
         "coordinates": [{"lat": 35.6812, "lon": 139.7671}],
         "target_apis": ["XKT013", "XKT014"],
@@ -77,14 +77,14 @@ def test_tool_payload_redacts_coordinates_and_keeps_the_rest():
 
     line = _run(code)[-1]
 
-    assert line["payload"]["coordinates"] == "[Redacted]"
+    assert line["payload"]["coordinates"] == [{"lat": 35.6812, "lon": 139.7671}]
     assert line["payload"]["target_apis"] == ["XKT013", "XKT014"]
     assert line["payload"]["year"] == "2024"
 
 
 # payload.py logs through the stdlib logger, so it passes the payload as `extra=`. ExtraAdder
-# puts it on the event dict where redaction can walk it; an f-string would be opaque.
-def test_stdlib_extra_fields_are_redacted():
+# puts it on the event dict where redaction can walk it; an f-string would be opaque to it.
+def test_stdlib_extra_fields_reach_the_event_dict():
     code = (
         "import logging, src.logger\n"
         "logging.getLogger('payload').info(\n"
@@ -95,7 +95,7 @@ def test_stdlib_extra_fields_are_redacted():
 
     line = _run(code)[-1]
 
-    assert line["payload"]["coordinates"] == "[Redacted]"
+    assert line["payload"]["coordinates"] == [{"lat": 35.6, "lon": 139.7}]
     assert line["severity"] == "INFO"
 
 

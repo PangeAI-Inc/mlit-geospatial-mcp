@@ -26,33 +26,28 @@ _SECRET_KEYS = {
     "dsn",
 }
 
-# OWASP "log with caution": personal data, pseudonymised.
+# Direct identifiers only. These make a line attributable to a person and have no debugging
+# value, because user ids are logged alongside them.
 _PII_KEYS = {
     "email",
     "phone",
     "phonenumber",
-    "address",
-    "street",
-    "postalcode",
-    "zip",
-    "latitude",
-    "longitude",
-    "lat",
-    "lng",
-    "lon",
-    "coordinates",
-    "coords",
     "firstname",
     "lastname",
     "fullname",
 }
+
+# Deliberately NOT denied: address, street, postalCode, zip, lat/lon/latitude/longitude,
+# coordinates. They are the payload of a geospatial product — redacting them makes a failing
+# request impossible to reproduce — and the same content already survives in the free-text
+# message we keep by choice, so masking the structured copy buys almost nothing.
 
 _DENY_KEYS = _SECRET_KEYS | _PII_KEYS
 
 # Values that arrive inside a string instead of under a key, where matching on the key cannot
 # reach them: requests/urllib3 put the full request URL in their exception text, psycopg puts
 # the connection string in its own, and an f-string log message bakes in whatever it formatted.
-_TEXT_KEYS = {"event", "message", "error", "exception", "stack", "traceback", "excinfo"}
+_TEXT_KEYS = {"event", "message", "error", "exception", "stack"}
 
 _URL_CREDENTIALS_RE = re.compile(r"([a-zA-Z][\w+.-]*://[^\s:/@]+):[^\s@/]+@")
 
