@@ -56,7 +56,9 @@ def test_credentials_inside_text_are_scrubbed():
     assert "PASSWORD123" not in line["exception"]
     # The line stays useful: only the query string and the password are replaced.
     assert line["error"].startswith("HTTPSConnectionPool")
-    assert "?[Redacted]" in line["error"]
+    # Only the secret param goes: the rest of the URL is what makes the line debuggable.
+    assert "apiKey=[Redacted]" in line["error"]
+    assert "api.example.com/v1" in line["error"]
     assert "[Redacted]@db.internal:5432" in line["exception"]
 
 
@@ -113,8 +115,9 @@ def test_api_failure_never_logs_the_api_key():
 
     assert "SECRET123" not in json.dumps(line, ensure_ascii=False)
     assert line["severity"] == "ERROR"
-    # Key names stay: knowing which params were sent is what makes the line debuggable.
+    # Key names and non-secret params stay: that is what makes the line debuggable.
     assert "apiKey" in line["message"]
+    assert "year=2024" in line["message"]
 
 
 # setup_logger used to attach its own handler while still propagating to the root one, which

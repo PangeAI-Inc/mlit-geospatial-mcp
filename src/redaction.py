@@ -55,7 +55,14 @@ _DENY_KEYS = _SECRET_KEYS | _PII_KEYS
 _TEXT_KEYS = {"event", "message", "error", "exception", "stack", "traceback", "excinfo"}
 
 _URL_CREDENTIALS_RE = re.compile(r"([a-zA-Z][\w+.-]*://[^\s:/@]+):[^\s@/]+@")
-_QUERY_STRING_RE = re.compile(r"\?[^\s\"'>]+")
+
+# Only the sensitive query params, not the whole query string: in a tile request the dataset in
+# `url=` is the most useful thing on the line, and nuking it costs more than it protects.
+_SENSITIVE_PARAM_RE = re.compile(
+    r"([?&][^=&\s]*(?:key|token|secret|password|signature|sig|credential|auth)[^=&\s]*=)"
+    r"[^&\s\"'>]+",
+    re.IGNORECASE,
+)
 
 
 def _normalize(key: str) -> str:
@@ -65,7 +72,7 @@ def _normalize(key: str) -> str:
 def _scrub_text(text: str) -> str:
     text = _URL_CREDENTIALS_RE.sub(rf"\1:{REDACTED}@", text)
 
-    return _QUERY_STRING_RE.sub(f"?{REDACTED}", text)
+    return _SENSITIVE_PARAM_RE.sub(rf"\g<1>{REDACTED}", text)
 
 
 def _redact(value):
