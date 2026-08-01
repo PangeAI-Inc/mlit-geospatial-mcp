@@ -21,8 +21,7 @@ def get(
         # elif response_type:
 
     except Exception as e:
-        # Keys only: the values carry the API key, and a dict inside an f-string is opaque to
-        # the shared scrub, which only strips URL query strings.
+        # Keys only: the values carry the API key.
         param_keys = sorted(params) if params else []
         logger.error(f"API呼び出し失敗 URL:{url} param_keys:{param_keys} エラー:{e}")
         # Continue with an empty result set

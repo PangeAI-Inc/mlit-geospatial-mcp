@@ -18,7 +18,6 @@ from request_processor.handler import handle_request
 from tools import API_SPECS, TOOLS
 from utils.payload import build_payload
 
-# Logger setup
 logger = get_logger(__name__)
 
 
@@ -59,8 +58,6 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
         spec=spec,
         args=arguments,
     )
-    # Structured, not an f-string: the payload carries user query args, and redaction can only
-    # walk a dict.
     logger.info("Tool payload", payload=payload)
     result = await handle_request(payload)
     return [
