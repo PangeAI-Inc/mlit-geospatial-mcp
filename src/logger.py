@@ -12,13 +12,13 @@ except ImportError:
     # server.py runs as a bare script (see README), not as part of the `src` package.
     from redaction import redact_processor, severity_processor
 
-APP_ENV = os.environ.get("APP_ENV", "local")
+APP_ENV = os.environ.get("APP_ENV")
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
 SERVICE_NAME = "mlit-geospatial-mcp"
 
 
 def _standardize_log_structure(logger, method_name, event_dict):
-    event_dict.setdefault("appEnv", APP_ENV)
+    event_dict.setdefault("appEnv", APP_ENV or "local")
     event_dict.setdefault("service", SERVICE_NAME)
     message = event_dict.get("event") or event_dict.get("message")
     if message:
@@ -27,8 +27,7 @@ def _standardize_log_structure(logger, method_name, event_dict):
 
 
 def _get_renderer():
-    # Raw env var, not the APP_ENV constant: its "local" default would match in a container.
-    if os.environ.get("APP_ENV") == "local" or sys.stderr.isatty():
+    if APP_ENV == "local" or sys.stderr.isatty():
         return ConsoleRenderer()
     return structlog.processors.JSONRenderer(serializer=json.dumps)
 

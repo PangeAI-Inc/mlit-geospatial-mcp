@@ -74,7 +74,6 @@ def test_tool_payload_stays_reproducible():
     assert line["payload"]["year"] == "2024"
 
 
-# `extra=` lands on the event dict where redaction can walk it; an f-string would not.
 def test_stdlib_extra_fields_reach_the_event_dict():
     code = (
         "import logging, src.logger\n"
@@ -110,7 +109,6 @@ def test_api_failure_never_logs_the_api_key():
     assert "year=2024" in line["message"]
 
 
-# It used to attach its own handler and still propagate, emitting every line twice.
 def test_setup_logger_emits_exactly_one_structured_line():
     code = (
         "from src.utils.logger_config import setup_logger\n"
