@@ -27,12 +27,8 @@ def _standardize_log_structure(logger, method_name, event_dict):
 
 
 def _get_renderer():
-    """Console when a human is watching, JSON everywhere else.
-
-    An explicit APP_ENV=local, or an attached terminal. A container has neither, so an unset
-    APP_ENV can no longer silently downgrade deployed logs to unstructured console output.
-    Read the raw variable, not the APP_ENV constant, whose default would match "local".
-    """
+    """Console for a human at a terminal or APP_ENV=local, JSON everywhere else."""
+    # Raw env var, not the APP_ENV constant: its "local" default would match in a container.
     if os.environ.get("APP_ENV") == "local" or sys.stderr.isatty():
         return ConsoleRenderer()
     return structlog.processors.JSONRenderer(serializer=json.dumps)
@@ -54,8 +50,7 @@ def _configure() -> None:
             redact_processor,
             _get_renderer(),
         ],
-        # stderr, not stdout: mlit's stdout is an MCP JSON-RPC channel, and the stdlib
-        # bridge already writes here, so one stream keeps ordering intact.
+        # stderr: stdout is this server's MCP protocol channel.
         logger_factory=structlog.PrintLoggerFactory(file=sys.stderr),
         wrapper_class=structlog.make_filtering_bound_logger(level),
         context_class=dict,

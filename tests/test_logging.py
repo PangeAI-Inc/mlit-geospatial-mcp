@@ -133,9 +133,7 @@ def test_setup_logger_emits_exactly_one_structured_line():
     assert len(lines) == 1
     assert lines[0]["severity"] == "ERROR"
 
-# The renderer decides between console and JSON. A deployed container has no terminal and does
-# not set APP_ENV=local, which is the condition tile-server got wrong: it shipped ANSI-coloured
-# plaintext with no severity to Cloud Logging. Piping this subprocess reproduces "no terminal".
+# A deployed container: no terminal, APP_ENV not local. What tile-server got wrong.
 def test_deployed_conditions_render_json():
     result = subprocess.run(
         [sys.executable, "-c", "from src.logger import get_logger\nget_logger('x').info('probe')\n"],
@@ -145,13 +143,13 @@ def test_deployed_conditions_render_json():
         check=True,
     )
     output = f"{result.stdout}\n{result.stderr}".strip()
-    line = json.loads([l for l in output.splitlines() if l.startswith("{")][-1])
+    line = json.loads([x for x in output.splitlines() if x.startswith("{")][-1])
 
     assert line["severity"] == "INFO"
     assert "\x1b[" not in output, "ANSI escapes mean the console renderer was selected"
 
 
-# The explicit override a developer opts into, and which .env files already set.
+# The override a developer opts into; .env files already set it.
 def test_app_env_local_keeps_console_output():
     result = subprocess.run(
         [sys.executable, "-c", "from src.logger import get_logger\nget_logger('x').info('probe')\n"],
@@ -164,8 +162,7 @@ def test_app_env_local_keeps_console_output():
     assert "\x1b[" in f"{result.stdout}{result.stderr}", "APP_ENV=local should stay readable"
 
 
-# mlit is a stdio MCP server: its stdout carries JSON-RPC frames, and the MCP spec forbids
-# writing anything else there. The other services share the rule so all logs land on one stream.
+# stdout is mlit's MCP protocol channel, so logs must never land there.
 def test_nothing_is_written_to_stdout():
     result = subprocess.run(
         [
