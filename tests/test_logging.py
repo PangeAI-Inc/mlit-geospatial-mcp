@@ -76,8 +76,8 @@ def test_tool_payload_stays_reproducible():
 
 def test_stdlib_extra_fields_reach_the_event_dict():
     code = (
-        "import logging, src.logger\n"
-        "logging.getLogger('payload').info(\n"
+        "from src.utils.logger_config import setup_logger\n"
+        "setup_logger('payload').info(\n"
         "    'build payload',\n"
         "    extra={'payload': {'coordinates': [{'lat': 35.6, 'lon': 139.7}]}},\n"
         ")\n"
@@ -162,3 +162,20 @@ def test_nothing_is_written_to_stdout():
 
     assert result.stdout == "", "stdout is a protocol channel; logs belong on stderr"
     assert json.loads(result.stderr.strip().splitlines()[-1])["severity"] == "ERROR"
+
+def test_third_party_warnings_are_captured_but_not_their_chatter():
+    code = (
+        "import logging, warnings\n"
+        "import src.logger  # noqa: F401  configures logging\n"
+        "logging.getLogger('langchain_core').warning('tracer failed')\n"
+        "logging.getLogger('httpx').info('HTTP Request: POST https://x')\n"
+        "warnings.warn('deprecated', DeprecationWarning)\n"
+    )
+
+    lines = _run(code)
+    messages = " ".join(line["message"] for line in lines)
+
+    assert any(line["severity"] == "WARNING" for line in lines)
+    assert "tracer failed" in messages
+    assert "deprecated" in messages, "warnings.warn should route through captureWarnings"
+    assert "HTTP Request" not in messages, "third-party INFO is below the root WARNING floor"

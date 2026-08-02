@@ -1,8 +1,7 @@
-import logging
-
 from utils.definitions import ApiSpec
+from utils.logger_config import setup_logger
 
-logger = logging.getLogger(__name__)
+logger = setup_logger(__name__)
 
 
 def build_payload(
