@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import sys
 
 import structlog
 from structlog.dev import ConsoleRenderer
@@ -11,13 +12,13 @@ except ImportError:
     # server.py runs as a bare script (see README), not as part of the `src` package.
     from redaction import redact_processor, severity_processor
 
-APP_ENV = os.environ.get("APP_ENV", "local")
+APP_ENV = os.environ.get("APP_ENV")
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
 SERVICE_NAME = "mlit-geospatial-mcp"
 
 
 def _standardize_log_structure(logger, method_name, event_dict):
-    event_dict.setdefault("appEnv", APP_ENV)
+    event_dict.setdefault("appEnv", APP_ENV or "local")
     event_dict.setdefault("service", SERVICE_NAME)
     message = event_dict.get("event") or event_dict.get("message")
     if message:
@@ -25,9 +26,8 @@ def _standardize_log_structure(logger, method_name, event_dict):
     return event_dict
 
 
-def _get_renderer(app_env: str):
-    """Console locally, JSON everywhere else, shared by structlog and stdlib records."""
-    if app_env == "local":
+def _get_renderer():
+    if APP_ENV == "local" or sys.stderr.isatty():
         return ConsoleRenderer()
     return structlog.processors.JSONRenderer(serializer=json.dumps)
 
@@ -46,14 +46,15 @@ def _configure() -> None:
             structlog.processors.format_exc_info,
             structlog.processors.UnicodeDecoder(),
             redact_processor,
-            _get_renderer(APP_ENV),
+            _get_renderer(),
         ],
+        # stderr: stdout is this server's MCP protocol channel.
+        logger_factory=structlog.PrintLoggerFactory(file=sys.stderr),
         wrapper_class=structlog.make_filtering_bound_logger(level),
         context_class=dict,
         cache_logger_on_first_use=True,
     )
 
-    # Render stdlib records (uvicorn's, and any logging.getLogger caller) through the same chain.
     formatter = structlog.stdlib.ProcessorFormatter(
         foreign_pre_chain=[
             structlog.contextvars.merge_contextvars,
@@ -66,15 +67,14 @@ def _configure() -> None:
         ],
         processors=[
             structlog.stdlib.ProcessorFormatter.remove_processors_meta,
-            _get_renderer(APP_ENV),
+            _get_renderer(),
         ],
     )
 
     handler = logging.StreamHandler()
     handler.setFormatter(formatter)
 
-    # "" is the root logger, so every existing logging.getLogger(__name__) call site
-    # in this repo renders through the shared chain without touching its call sites.
+    # "" is the root logger, so existing logging.getLogger call sites need no change.
     for name in ("", "uvicorn", "uvicorn.error", "uvicorn.access"):
         std_logger = logging.getLogger(name)
         std_logger.handlers = [handler]

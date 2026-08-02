@@ -5,17 +5,12 @@ import sys
 
 
 def _run(code: str) -> list[dict]:
-    """Run code in a fresh process against the real logger and parse the JSON lines it emits.
-
-    Both streams are read: structlog renders to stdout, while the stdlib bridge's StreamHandler
-    defaults to stderr. Cloud Logging keys off the `severity` field either way.
-    """
+    """Run code in a fresh process against the real logger and return its JSON lines."""
     result = subprocess.run(
         [sys.executable, "-c", code],
         capture_output=True,
         text=True,
-        # Any value but "local" selects the JSON renderer; passed explicitly so a
-        # shell with APP_ENV=local exported does not turn this into console output.
+        # Explicit, so an exported APP_ENV=local cannot flip this to console output.
         env={**os.environ, "APP_ENV": "test", "LOG_LEVEL": "INFO"},
         check=True,
     )
@@ -45,7 +40,6 @@ def test_secrets_and_pii_are_redacted_at_any_depth():
     assert line["keep"] == "yes"
 
 
-# A key-based deny list cannot reach these: the credential is inside the string, not under a key.
 def test_credentials_inside_text_are_scrubbed():
     line = _emit(
         error="HTTPSConnectionPool: https://api.example.com/v1?apiKey=SECRET123 failed",
@@ -54,7 +48,6 @@ def test_credentials_inside_text_are_scrubbed():
 
     assert "SECRET123" not in line["error"]
     assert "PASSWORD123" not in line["exception"]
-    # The line stays useful: only the query string and the password are replaced.
     assert line["error"].startswith("HTTPSConnectionPool")
     # Only the secret param goes: the rest of the URL is what makes the line debuggable.
     assert "apiKey=[Redacted]" in line["error"]
@@ -62,8 +55,7 @@ def test_credentials_inside_text_are_scrubbed():
     assert "[Redacted]@db.internal:5432" in line["exception"]
 
 
-# The payload shape build_payload produces, logged by both server.py and payload.py. The
-# coordinates are the whole point of this service, so they are logged, not masked.
+# Coordinates are this service's whole input, so they are logged, not masked.
 def test_tool_payload_stays_reproducible():
     payload = {
         "coordinates": [{"lat": 35.6812, "lon": 139.7671}],
@@ -82,8 +74,6 @@ def test_tool_payload_stays_reproducible():
     assert line["payload"]["year"] == "2024"
 
 
-# payload.py logs through the stdlib logger, so it passes the payload as `extra=`. ExtraAdder
-# puts it on the event dict where redaction can walk it; an f-string would be opaque to it.
 def test_stdlib_extra_fields_reach_the_event_dict():
     code = (
         "import logging, src.logger\n"
@@ -99,8 +89,7 @@ def test_stdlib_extra_fields_reach_the_event_dict():
     assert line["severity"] == "INFO"
 
 
-# The real failure path in requester.py: requests puts the full URL, API key included, inside
-# the exception's own text, so dropping `params` from the log is not enough on its own.
+# requests puts the URL, API key included, in its exception text.
 def test_api_failure_never_logs_the_api_key():
     code = (
         "import logging, src.logger\n"
@@ -120,8 +109,6 @@ def test_api_failure_never_logs_the_api_key():
     assert "year=2024" in line["message"]
 
 
-# setup_logger used to attach its own handler while still propagating to the root one, which
-# emitted every line twice — once as plaintext carrying no severity.
 def test_setup_logger_emits_exactly_one_structured_line():
     code = (
         "from src.utils.logger_config import setup_logger\n"
@@ -132,3 +119,46 @@ def test_setup_logger_emits_exactly_one_structured_line():
 
     assert len(lines) == 1
     assert lines[0]["severity"] == "ERROR"
+
+def test_deployed_conditions_render_json():
+    result = subprocess.run(
+        [sys.executable, "-c", "from src.logger import get_logger\nget_logger('x').info('probe')\n"],
+        capture_output=True,
+        text=True,
+        env={**os.environ, "APP_ENV": "production"},
+        check=True,
+    )
+    output = f"{result.stdout}\n{result.stderr}".strip()
+    line = json.loads([x for x in output.splitlines() if x.startswith("{")][-1])
+
+    assert line["severity"] == "INFO"
+    assert "\x1b[" not in output, "ANSI escapes mean the console renderer was selected"
+
+
+def test_app_env_local_keeps_console_output():
+    result = subprocess.run(
+        [sys.executable, "-c", "from src.logger import get_logger\nget_logger('x').info('probe')\n"],
+        capture_output=True,
+        text=True,
+        env={**os.environ, "APP_ENV": "local"},
+        check=True,
+    )
+
+    assert "\x1b[" in f"{result.stdout}{result.stderr}", "APP_ENV=local should stay readable"
+
+
+def test_nothing_is_written_to_stdout():
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from src.logger import get_logger\nget_logger('x').error('probe')\n",
+        ],
+        capture_output=True,
+        text=True,
+        env={**os.environ, "APP_ENV": "test"},
+        check=True,
+    )
+
+    assert result.stdout == "", "stdout is a protocol channel; logs belong on stderr"
+    assert json.loads(result.stderr.strip().splitlines()[-1])["severity"] == "ERROR"
