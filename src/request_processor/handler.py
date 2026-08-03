@@ -8,13 +8,13 @@ Functions:
         MCPからのリクエストを処理し、結果を返す。
 """
 
-import logging
 from pathlib import Path
 
 from request_processor.models.api_models import RequestModel
 from request_processor.service.geospatial_service import GeospatialService
+from utils.logger_config import setup_logger
 
-logger = logging.getLogger(__name__)
+logger = setup_logger(__name__)
 
 
 async def handle_request(payload: dict) -> dict:

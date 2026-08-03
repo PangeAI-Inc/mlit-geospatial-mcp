@@ -1,9 +1,8 @@
-import logging
-
 from request_processor.service.apis.base_api import BasePointApi
 from utils.const import LIBRARY_API_URL
+from utils.logger_config import setup_logger
 
-logger = logging.getLogger(__name__)
+logger = setup_logger(__name__)
 
 
 class RealEstateApi12(BasePointApi):

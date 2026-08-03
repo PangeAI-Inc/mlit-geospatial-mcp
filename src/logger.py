@@ -74,8 +74,16 @@ def _configure() -> None:
     handler = logging.StreamHandler()
     handler.setFormatter(formatter)
 
-    # "" is the root logger, so existing logging.getLogger call sites need no change.
-    for name in ("", "uvicorn", "uvicorn.error", "uvicorn.access"):
+    # Root catches third-party libraries. They inherit its WARNING floor, so their routine INFO
+    # never reaches us, while the loggers given an explicit level below keep theirs.
+    root = logging.getLogger()
+    root.handlers = [handler]
+    root.setLevel(logging.WARNING)
+
+    # Routes warnings.warn through the same chain, e.g. library deprecation notices.
+    logging.captureWarnings(True)
+
+    for name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
         std_logger = logging.getLogger(name)
         std_logger.handlers = [handler]
         std_logger.propagate = False
