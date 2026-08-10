@@ -4,6 +4,7 @@ import os
 import sys
 
 import structlog
+from opentelemetry import trace
 from structlog.dev import ConsoleRenderer
 
 try:
@@ -26,6 +27,17 @@ def _standardize_log_structure(logger, method_name, event_dict):
     return event_dict
 
 
+def _add_span_context(logger, method_name, event_dict):
+    # Better Stack correlates logs to traces on the nested span.trace_id/span.span_id keys.
+    span_context = trace.get_current_span().get_span_context()
+    if span_context.is_valid:
+        event_dict["span"] = {
+            "trace_id": format(span_context.trace_id, "032x"),
+            "span_id": format(span_context.span_id, "016x"),
+        }
+    return event_dict
+
+
 def _get_renderer():
     if APP_ENV == "local" or sys.stderr.isatty():
         return ConsoleRenderer()
@@ -42,6 +54,7 @@ def _configure() -> None:
             severity_processor,
             structlog.processors.TimeStamper(fmt="iso", utc=True),
             _standardize_log_structure,
+            _add_span_context,
             structlog.processors.StackInfoRenderer(),
             structlog.processors.format_exc_info,
             structlog.processors.UnicodeDecoder(),
@@ -62,6 +75,7 @@ def _configure() -> None:
             severity_processor,
             structlog.processors.TimeStamper(fmt="iso", utc=True),
             _standardize_log_structure,
+            _add_span_context,
             structlog.stdlib.ExtraAdder(),
             redact_processor,
         ],

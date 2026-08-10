@@ -163,6 +163,32 @@ def test_nothing_is_written_to_stdout():
     assert result.stdout == "", "stdout is a protocol channel; logs belong on stderr"
     assert json.loads(result.stderr.strip().splitlines()[-1])["severity"] == "ERROR"
 
+def test_span_ids_are_attached_only_while_a_span_is_active():
+    code = (
+        "from opentelemetry import trace\n"
+        "from opentelemetry.sdk.trace import TracerProvider\n"
+        "from src.logger import get_logger\n"
+        "trace.set_tracer_provider(TracerProvider())\n"
+        "log = get_logger('test')\n"
+        "log.error('outside')\n"
+        "with trace.get_tracer('t').start_as_current_span('probe') as span:\n"
+        "    ctx = span.get_span_context()\n"
+        "    log.error(\n"
+        "        'inside',\n"
+        "        want_trace=format(ctx.trace_id, '032x'),\n"
+        "        want_span=format(ctx.span_id, '016x'),\n"
+        "    )\n"
+    )
+
+    outside, inside = _run(code)[-2:]
+
+    assert "span" not in outside
+    assert inside["span"] == {
+        "trace_id": inside["want_trace"],
+        "span_id": inside["want_span"],
+    }
+
+
 def test_third_party_warnings_are_captured_but_not_their_chatter():
     code = (
         "import logging, warnings\n"
